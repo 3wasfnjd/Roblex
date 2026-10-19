@@ -1,0 +1,48 @@
+name: Publish to Roblox
+run-name: Publish ${{ inputs.map_file }} to place ${{ inputs.place_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      map_file:
+        description: "Map file in this repository"
+        required: true
+        type: string
+        default: maps/Boulevard-Jood.rbxlx.gz
+      universe_id:
+        description: "Universe ID / رقم التجربة"
+        required: true
+        type: string
+      place_id:
+        description: "Place ID / رقم المكان الذي سيُحدّث"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: roblox-publish-${{ inputs.universe_id }}-${{ inputs.place_id }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test publisher
+        run: python3 -m unittest discover -s tests -v
+      - name: Validate selected map
+        env:
+          MAP_FILE: ${{ inputs.map_file }}
+        run: python3 scripts/roblox_publish.py validate "$MAP_FILE"
+      - name: Publish saved place
+        env:
+          MAP_FILE: ${{ inputs.map_file }}
+          ROBLOX_UNIVERSE_ID: ${{ inputs.universe_id }}
+          ROBLOX_PLACE_ID: ${{ inputs.place_id }}
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+        run: python3 scripts/roblox_publish.py publish "$MAP_FILE"
