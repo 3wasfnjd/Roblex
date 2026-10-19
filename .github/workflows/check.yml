@@ -1,0 +1,27 @@
+name: Check Roblox maps
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test publishing safeguards
+        run: python3 -m unittest discover -s tests -v
+      - name: Verify original upload checksum
+        run: sha256sum --check maps/SHA256SUMS
+      - name: Validate place files
+        run: |
+          while IFS= read -r -d '' file; do
+            python3 scripts/roblox_publish.py validate "$file"
+          done < <(find maps -type f \( -name '*.rbxlx' -o -name '*.rbxl' -o -name '*.rbxlx.gz' -o -name '*.rbxl.gz' \) -print0)
