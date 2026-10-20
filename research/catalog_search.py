@@ -6,16 +6,20 @@ QUERIES = json.load(open(os.path.join(os.path.dirname(__file__), 'queries.json')
 OUT = os.path.dirname(__file__)
 os.makedirs(os.path.join(OUT, 'thumbs'), exist_ok=True)
 UA = {'User-Agent': 'Mozilla/5.0 (catalog research for Boulevard Jood)', 'Accept': 'application/json'}
+LOG = open(os.path.join(OUT, 'log.txt'), 'w')
+def log(*a):
+    print(*a); print(*a, file=LOG); LOG.flush()
 def get(url):
-    for attempt in range(4):
+    for attempt in range(3):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=30) as r:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=20) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
-            if e.code == 429: time.sleep(5 + attempt * 5); continue
-            print('HTTP', e.code, url, file=sys.stderr); return None
+            log('HTTP', e.code, url[:120])
+            if e.code == 429: time.sleep(8); continue
+            return None
         except Exception as e:
-            print('ERR', e, url, file=sys.stderr); time.sleep(2)
+            log('ERR', e, url[:120]); time.sleep(2)
     return None
 csrf = ['']
 def details(ids):
@@ -27,8 +31,9 @@ def details(ids):
             with urllib.request.urlopen(req, timeout=30) as r: return json.load(r).get('data', [])
         except urllib.error.HTTPError as e:
             if e.code == 403 and e.headers.get('x-csrf-token'): csrf[0] = e.headers['x-csrf-token']; continue
-            if e.code == 429: time.sleep(6); continue
-            print('details HTTP', e.code, file=sys.stderr); return []
+            log('details HTTP', e.code)
+            if e.code == 429: time.sleep(8); continue
+            return []
     return []
 result = {}
 for key, spec in QUERIES.items():
@@ -41,8 +46,9 @@ for key, spec in QUERIES.items():
     result[key] = {'query': spec['q'], 'items': [{k: d.get(k) for k in ('id', 'name', 'assetType', 'price', 'priceStatus', 'creatorName',
                    'creatorType', 'creatorHasVerifiedBadge', 'favoriteCount', 'itemRestrictions', 'offSaleDeadline',
                    'unitsAvailableForConsumption', 'totalQuantity', 'description')} for d in keep]}
-    print(key, spec['q'], len(ids), '->', len(keep))
-    time.sleep(1.2)
+    log(key, spec['q'], len(ids), '->', len(keep))
+    json.dump(result, open(os.path.join(OUT, 'catalog.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    time.sleep(2.5)
 all_ids = sorted({it['id'] for v in result.values() for it in v['items']})
 for i in range(0, len(all_ids), 50):
     chunk = all_ids[i:i + 50]
