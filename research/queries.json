@@ -1,0 +1,164 @@
+{
+ "starhalo": {
+  "q": "star halo"
+ },
+ "angelhalo": {
+  "q": "angel halo"
+ },
+ "tiara": {
+  "q": "tiara"
+ },
+ "heartcrown": {
+  "q": "heart crown"
+ },
+ "flowercrown": {
+  "q": "flower crown"
+ },
+ "dress": {
+  "q": "princess dress",
+  "category": "Clothing"
+ },
+ "fairydress": {
+  "q": "fairy dress",
+  "category": "Clothing"
+ },
+ "partydress": {
+  "q": "tutu dress",
+  "category": "Clothing"
+ },
+ "ruffledress": {
+  "q": "ruffle dress",
+  "category": "Clothing"
+ },
+ "stardress": {
+  "q": "star dress",
+  "category": "Clothing"
+ },
+ "bunnyears": {
+  "q": "bunny ears"
+ },
+ "catears": {
+  "q": "cat ears"
+ },
+ "bearears": {
+  "q": "bear ears"
+ },
+ "bow": {
+  "q": "pink bow"
+ },
+ "heartclips": {
+  "q": "heart clips"
+ },
+ "fairywings": {
+  "q": "fairy wings"
+ },
+ "angelwings": {
+  "q": "angel wings"
+ },
+ "butterflywings": {
+  "q": "butterfly wings"
+ },
+ "heartwings": {
+  "q": "heart wings"
+ },
+ "starwings": {
+  "q": "star wings"
+ },
+ "ponytail": {
+  "q": "ponytail hair"
+ },
+ "spacebuns": {
+  "q": "space buns hair"
+ },
+ "braids": {
+  "q": "braids hair"
+ },
+ "longhair": {
+  "q": "long hair"
+ },
+ "curlyhair": {
+  "q": "curly hair"
+ },
+ "heartglasses": {
+  "q": "heart glasses"
+ },
+ "starglasses": {
+  "q": "star glasses"
+ },
+ "blush": {
+  "q": "blush"
+ },
+ "sparkles": {
+  "q": "face stars"
+ },
+ "necklace": {
+  "q": "pearl necklace"
+ },
+ "bunnybag": {
+  "q": "bunny bag"
+ },
+ "bag": {
+  "q": "heart purse"
+ },
+ "starbag": {
+  "q": "star bag"
+ },
+ "strawberrybag": {
+  "q": "strawberry bag"
+ },
+ "cloudbag": {
+  "q": "cloud bag"
+ },
+ "sparkleaura": {
+  "q": "sparkle aura"
+ },
+ "hearttrail": {
+  "q": "heart aura"
+ },
+ "startrail": {
+  "q": "star aura"
+ },
+ "rainbowaura": {
+  "q": "rainbow aura"
+ },
+ "bubbleaura": {
+  "q": "bubble aura"
+ },
+ "rollerskates": {
+  "q": "roller skates",
+  "category": "All"
+ },
+ "heels": {
+  "q": "heels",
+  "category": "All"
+ },
+ "bunnyslippers": {
+  "q": "bunny slippers",
+  "category": "All"
+ },
+ "starboots": {
+  "q": "boots",
+  "category": "All"
+ },
+ "shoes": {
+  "q": "sneakers",
+  "category": "All"
+ },
+ "cute_generic": {
+  "q": "cute"
+ },
+ "kawaii": {
+  "q": "kawaii"
+ },
+ "pink": {
+  "q": "pink"
+ },
+ "girl_clothing": {
+  "q": "cute",
+  "category": "Clothing"
+ },
+ "shoes_generic": {
+  "q": "shoes",
+  "category": "All"
+ }
+}

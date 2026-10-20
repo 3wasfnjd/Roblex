@@ -1,0 +1,24 @@
+name: Catalog research (free items)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Search the avatar catalog
+        run: python3 research/catalog_search.py
+      - name: Save results to the catalog-data branch
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout -B catalog-data
+          git add research
+          git commit -m "Catalog research results" || true
+          git push -f origin catalog-data
