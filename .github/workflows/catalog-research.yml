@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Search the avatar catalog
         timeout-minutes: 35
-        run: python3 research/catalog_search.py
+        run: python3 research/thumbs.py
       - name: Save results to the catalog-data branch
         if: always()
         run: |
