@@ -16,7 +16,7 @@ def get(url):
                 return json.load(r)
         except urllib.error.HTTPError as e:
             log('HTTP', e.code, url[:120])
-            if e.code == 429: time.sleep(8); continue
+            if e.code == 429: time.sleep(25); continue
             return None
         except Exception as e:
             log('ERR', e, url[:120]); time.sleep(2)
@@ -47,8 +47,8 @@ for key, spec in QUERIES.items():
                    'creatorType', 'creatorHasVerifiedBadge', 'favoriteCount', 'itemRestrictions', 'offSaleDeadline',
                    'unitsAvailableForConsumption', 'totalQuantity', 'description')} for d in keep]}
     log(key, spec['q'], len(ids), '->', len(keep))
-    json.dump(result, open(os.path.join(OUT, 'catalog.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
-    time.sleep(2.5)
+    json.dump(result, open(os.path.join(OUT, 'catalog2.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    time.sleep(14)
 all_ids = sorted({it['id'] for v in result.values() for it in v['items']})
 for i in range(0, len(all_ids), 50):
     chunk = all_ids[i:i + 50]
@@ -60,5 +60,5 @@ for i in range(0, len(all_ids), 50):
                     open(os.path.join(OUT, 'thumbs', f"{d['targetId']}.png"), 'wb').write(r.read())
             except Exception as e: print('thumb', d['targetId'], e, file=sys.stderr)
     time.sleep(1)
-json.dump(result, open(os.path.join(OUT, 'catalog.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+json.dump(result, open(os.path.join(OUT, 'catalog2.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 print('done', len(all_ids), 'items')

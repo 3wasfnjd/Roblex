@@ -1,37 +1,30 @@
 {
- "starhalo": {
-  "q": "star halo"
- },
  "angelhalo": {
-  "q": "angel halo"
+  "q": "halo"
  },
  "tiara": {
   "q": "tiara"
  },
- "heartcrown": {
-  "q": "heart crown"
- },
  "flowercrown": {
   "q": "flower crown"
  },
+ "princess": {
+  "q": "princess"
+ },
  "dress": {
-  "q": "princess dress",
+  "q": "dress",
   "category": "Clothing"
  },
- "fairydress": {
-  "q": "fairy dress",
+ "skirt": {
+  "q": "skirt",
   "category": "Clothing"
  },
- "partydress": {
-  "q": "tutu dress",
+ "top": {
+  "q": "top",
   "category": "Clothing"
  },
- "ruffledress": {
-  "q": "ruffle dress",
-  "category": "Clothing"
- },
- "stardress": {
-  "q": "star dress",
+ "sweater": {
+  "q": "pink sweater",
   "category": "Clothing"
  },
  "bunnyears": {
@@ -40,17 +33,14 @@
  "catears": {
   "q": "cat ears"
  },
- "bearears": {
-  "q": "bear ears"
- },
  "bow": {
-  "q": "pink bow"
+  "q": "bow"
  },
- "heartclips": {
-  "q": "heart clips"
+ "ribbon": {
+  "q": "ribbon"
  },
- "fairywings": {
-  "q": "fairy wings"
+ "hairclip": {
+  "q": "hair clip"
  },
  "angelwings": {
   "q": "angel wings"
@@ -58,94 +48,66 @@
  "butterflywings": {
   "q": "butterfly wings"
  },
- "heartwings": {
-  "q": "heart wings"
- },
  "starwings": {
-  "q": "star wings"
+  "q": "wings"
  },
  "ponytail": {
-  "q": "ponytail hair"
- },
- "spacebuns": {
-  "q": "space buns hair"
+  "q": "ponytail"
  },
  "braids": {
-  "q": "braids hair"
+  "q": "braids"
  },
  "longhair": {
-  "q": "long hair"
+  "q": "pink hair"
  },
- "curlyhair": {
-  "q": "curly hair"
+ "blonde": {
+  "q": "blonde hair"
+ },
+ "glasses": {
+  "q": "glasses"
  },
  "heartglasses": {
   "q": "heart glasses"
  },
- "starglasses": {
-  "q": "star glasses"
- },
- "blush": {
-  "q": "blush"
- },
- "sparkles": {
-  "q": "face stars"
- },
  "necklace": {
-  "q": "pearl necklace"
+  "q": "necklace"
  },
- "bunnybag": {
-  "q": "bunny bag"
+ "makeup": {
+  "q": "makeup"
+ },
+ "lashes": {
+  "q": "eyelashes"
  },
  "bag": {
-  "q": "heart purse"
+  "q": "bag"
  },
- "starbag": {
-  "q": "star bag"
+ "purse": {
+  "q": "purse"
  },
- "strawberrybag": {
-  "q": "strawberry bag"
- },
- "cloudbag": {
-  "q": "cloud bag"
+ "backpack": {
+  "q": "backpack"
  },
  "sparkleaura": {
-  "q": "sparkle aura"
+  "q": "sparkle"
  },
- "hearttrail": {
-  "q": "heart aura"
+ "aura": {
+  "q": "aura"
  },
- "startrail": {
-  "q": "star aura"
- },
- "rainbowaura": {
-  "q": "rainbow aura"
- },
- "bubbleaura": {
-  "q": "bubble aura"
- },
- "rollerskates": {
-  "q": "roller skates",
+ "shoes": {
+  "q": "shoes",
   "category": "All"
  },
  "heels": {
   "q": "heels",
   "category": "All"
  },
- "bunnyslippers": {
-  "q": "bunny slippers",
-  "category": "All"
- },
- "starboots": {
+ "boots": {
   "q": "boots",
   "category": "All"
  },
- "shoes": {
+ "sneakers": {
   "q": "sneakers",
   "category": "All"
- },
- "cute_generic": {
-  "q": "cute"
  },
  "kawaii": {
   "q": "kawaii"
@@ -153,12 +115,10 @@
  "pink": {
   "q": "pink"
  },
- "girl_clothing": {
-  "q": "cute",
-  "category": "Clothing"
+ "heart": {
+  "q": "heart"
  },
- "shoes_generic": {
-  "q": "shoes",
-  "category": "All"
+ "star": {
+  "q": "star"
  }
 }
