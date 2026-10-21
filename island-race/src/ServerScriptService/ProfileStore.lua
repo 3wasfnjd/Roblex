@@ -6,9 +6,19 @@ local RS = game:GetService("ReplicatedStorage")
 local Config = require(RS:WaitForChild("IslandRace"):WaitForChild("Config"))
 local Rules = require(RS.IslandRace:WaitForChild("Rules"))
 
-local Store = DSS:GetDataStore("IslandRace_v1")
 local Profiles = {}
 Profiles.Live = {}
+
+-- GetDataStore throws in a place that was never published; fall back to temporary session data then.
+local storeCache
+local function store()
+	if storeCache == nil then
+		local ok, s = pcall(function() return DSS:GetDataStore("IslandRace_v1") end)
+		storeCache = ok and s or false
+		if not ok then warn("[Island Race] DataStore unavailable (publish the place to save progress): " .. tostring(s)) end
+	end
+	return storeCache or nil
+end
 
 local function key(player) return "player_" .. player.UserId end
 local function retry(fn)
@@ -22,7 +32,8 @@ end
 
 function Profiles.Load(player)
 	local p
-	if RunService:IsStudio() or game.GameId == 0 then
+	local Store = store()
+	if RunService:IsStudio() or game.GameId == 0 or not Store then
 		p = Rules.clean(nil, Config)
 		p.Temporary = true
 	else
@@ -61,6 +72,8 @@ function Profiles.Save(player, release)
 	if Profiles.Live[player] ~= p then return true end
 	p.Saving = true
 	local copy = Rules.snapshot(p)
+	local Store = store()
+	if not Store then p.Saving = false; if release then Profiles.Live[player] = nil end; return false end
 	local ok, result = retry(function()
 		return Store:UpdateAsync(key(player), function(old)
 			if type(old) ~= "table" or type(old.Lock) ~= "table" or old.Lock.Token ~= p.Token then return nil end
