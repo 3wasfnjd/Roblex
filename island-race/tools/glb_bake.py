@@ -96,17 +96,29 @@ def bake_mixed(src, dst, gltf, bin_):
     img = Image.open(io.BytesIO(image_bytes(gltf, bin_, gltf["images"][src_id], src))).convert("RGBA")
     W, H = img.size
     prims = [(mesh_i, pi, p) for mesh_i, mesh in enumerate(gltf["meshes"]) for pi, p in enumerate(mesh["primitives"])]
-    tiled = False
+    # tiled textures (UVs outside 0..1, e.g. the checker flags) are repeated into the atlas up to 16x16
+    umin = vmin = 0.0; umax = vmax = 1.0
     for _, _, p in prims:
         if p.get("material", 0) in tex_index:
             for u, v in read_accessor_vec2(gltf, bin_, p["attributes"]["TEXCOORD_0"]):
-                if u < -0.001 or u > 1.001 or v < -0.001 or v > 1.001: tiled = True; break
+                umin, umax, vmin, vmax = min(umin, u), max(umax, u), min(vmin, v), max(vmax, v)
+    u0, v0 = math.floor(umin), math.floor(vmin)
+    ru, rv = int(math.ceil(umax - u0)), int(math.ceil(vmax - v0))
+    tiled = False
+    if (ru, rv) != (1, 1):
+        if ru <= 16 and rv <= 16:
+            tiledimg = Image.new("RGBA", (W * ru, H * rv))
+            for i in range(ru):
+                for k in range(rv): tiledimg.paste(img, (i * W, k * H))
+            img = tiledimg; W, H = img.size
+        else:
+            tiled = True
     colors = []
     for mi, m in enumerate(materials):
         if mi in tex_index and not tiled:
             colors.append(None)
         elif mi in tex_index:
-            px = [c for c in img.getdata() if c[3] > 0] or [(200, 200, 200, 255)]
+            px = [c for c in list(img.get_flattened_data()) if c[3] > 0] or [(200, 200, 200, 255)]
             colors.append(tuple(sum(c[k] for c in px) // len(px) for k in range(3)) + (255,))
         else:
             f = m.get("pbrMetallicRoughness", {}).get("baseColorFactor", [1, 1, 1, 1])
@@ -130,7 +142,7 @@ def bake_mixed(src, dst, gltf, bin_):
         mi = p.get("material", 0)
         count = accessor_count(gltf, p["attributes"]["POSITION"])
         if colors[mi] is None:
-            uvs = [(u, v * H / total) for u, v in read_accessor_vec2(gltf, bin_, p["attributes"]["TEXCOORD_0"])]
+            uvs = [((u - u0) / ru, (v - v0) / rv * H / total) for u, v in read_accessor_vec2(gltf, bin_, p["attributes"]["TEXCOORD_0"])]
             data = struct.pack("<%df" % (count * 2), *[x for uv in uvs for x in uv])
         else:
             u = ((mi % cols) + 0.5) * cell / W; v = (H + ((mi // cols) + 0.5) * cell) / total
@@ -141,7 +153,7 @@ def bake_mixed(src, dst, gltf, bin_):
         p["attributes"].pop("COLOR_0", None); p["material"] = 0
     gltf["buffers"] = [{"byteLength": len(bin_)}]
     write_glb(dst, gltf, bin_)
-    return "atlas (%s)" % ("tiled texture averaged" if tiled else "texture + %d colours" % sum(1 for c in colors if c))
+    return "atlas (%s)" % ("tiled texture averaged" if tiled else "texture %dx%d repeat + %d colours" % (ru, rv, sum(1 for c in colors if c)))
 
 def bake(src, dst):
     gltf, bin_ = read_glb(src)
