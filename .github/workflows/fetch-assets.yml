@@ -20,10 +20,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: fetch-assets-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   fetch:
     runs-on: ubuntu-latest
@@ -60,15 +56,17 @@ jobs:
           ls -l work/pack.zip; file work/pack.zip
           rm -rf "models/$DEST"; mkdir -p "models/$DEST"
           unzip -q work/pack.zip -d "models/$DEST"
-          # keep only the useful formats
+          # keep only the useful formats; drop per-model preview renders and isometric sprites
           find "models/$DEST" -type f > work/all.txt
+          find "models/$DEST" -type d \( -iname Previews -o -iname Isometric -o -iname "FBX format" -o -iname "OBJ format" \) -prune -exec rm -rf {} +
           args=(); for g in $KEEP; do args+=( ! -iname "$g" ); done
           find "models/$DEST" -type f "${args[@]}" -delete
           find "models/$DEST" -type d -empty -delete
           echo "source: $ZIP" > "models/$DEST/SOURCE.txt"
           echo "kept $(find "models/$DEST" -type f | wc -l) of $(wc -l < work/all.txt) files"
           du -sh "models/$DEST"
-          find "models/$DEST" -type f | sort | head -200
+          find "models/$DEST" -type f | sort > work/kept.txt
+          head -n 300 work/kept.txt
       - name: Commit
         env:
           DEST: ${{ inputs.dest }}
@@ -77,5 +75,8 @@ jobs:
           git config user.email "github-actions@users.noreply.github.com"
           git add models
           git commit -m "Add asset pack: $DEST" || echo "nothing to commit"
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push origin HEAD:"${GITHUB_REF_NAME}"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin HEAD:"${GITHUB_REF_NAME}" && exit 0
+            echo "push attempt $attempt failed; retrying"; sleep $((attempt * 7))
+          done
+          exit 1
