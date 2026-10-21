@@ -1,0 +1,22 @@
+name: Check Najd asset upload access
+on:
+  push:
+    branches: [fix/najd-v6-assets]
+    paths:
+      - scripts/najd_assets.py
+      - .github/workflows/najd-assets.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    if: github.repository == '3wasfnjd/Roblex'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check asset capabilities without printing credentials
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+        run: python3 scripts/najd_assets.py
