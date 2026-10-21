@@ -64,11 +64,93 @@ def srgb_byte(c):
     s = 12.92 * c if c <= 0.0031308 else 1.055 * (c ** (1 / 2.4)) - 0.055
     return int(round(s * 255))
 
+def read_accessor_vec2(gltf, bin_, idx):
+    acc = gltf["accessors"][idx]; bv = gltf["bufferViews"][acc["bufferView"]]
+    base = bv.get("byteOffset", 0) + acc.get("byteOffset", 0); stride = bv.get("byteStride", 8)
+    assert acc["componentType"] == 5126 and acc["type"] == "VEC2"
+    return [struct.unpack_from("<2f", bin_, base + i * stride) for i in range(acc["count"])]
+
+def image_bytes(gltf, bin_, img, src):
+    if "bufferView" in img:
+        bv = gltf["bufferViews"][img["bufferView"]]; o = bv.get("byteOffset", 0)
+        return bytes(bin_[o:o + bv["byteLength"]])
+    uri = img["uri"]
+    p = os.path.join(os.path.dirname(src), uri.replace("/", os.sep))
+    if not os.path.exists(p): p = os.path.join(os.path.dirname(src), os.path.basename(uri))
+    return open(p, "rb").read()
+
+def bake_mixed(src, dst, gltf, bin_):
+    """Some materials use a texture, others a flat colour: compose one atlas (texture on top, colour
+    cells below) and remap every primitive's UVs onto it. Needs Pillow."""
+    from PIL import Image
+    import io
+    materials = gltf["materials"]
+    tex_index = {}
+    for mi, m in enumerate(materials):
+        t = m.get("pbrMetallicRoughness", {}).get("baseColorTexture")
+        if t: tex_index[mi] = gltf["textures"][t["index"]]["source"]
+    # one source texture only (Kenney kits never use more); tiled UVs fall back to the average colour
+    src_img = None; src_id = None
+    for mi, ii in tex_index.items():
+        src_id = ii
+    img = Image.open(io.BytesIO(image_bytes(gltf, bin_, gltf["images"][src_id], src))).convert("RGBA")
+    W, H = img.size
+    prims = [(mesh_i, pi, p) for mesh_i, mesh in enumerate(gltf["meshes"]) for pi, p in enumerate(mesh["primitives"])]
+    tiled = False
+    for _, _, p in prims:
+        if p.get("material", 0) in tex_index:
+            for u, v in read_accessor_vec2(gltf, bin_, p["attributes"]["TEXCOORD_0"]):
+                if u < -0.001 or u > 1.001 or v < -0.001 or v > 1.001: tiled = True; break
+    colors = []
+    for mi, m in enumerate(materials):
+        if mi in tex_index and not tiled:
+            colors.append(None)
+        elif mi in tex_index:
+            px = [c for c in img.getdata() if c[3] > 0] or [(200, 200, 200, 255)]
+            colors.append(tuple(sum(c[k] for c in px) // len(px) for k in range(3)) + (255,))
+        else:
+            f = m.get("pbrMetallicRoughness", {}).get("baseColorFactor", [1, 1, 1, 1])
+            colors.append(tuple(srgb_byte(x) for x in f[:3]) + (255,))
+    cell = 8; n = len(colors); cols = max(1, min(n, W // cell)); rows = int(math.ceil(n / cols))
+    strip = rows * cell
+    atlas = Image.new("RGBA", (W, H + strip), (0, 0, 0, 255))
+    if not tiled: atlas.paste(img, (0, 0))
+    for i, c in enumerate(colors):
+        if c is None: continue
+        cx, cy = (i % cols) * cell, H + (i // cols) * cell
+        atlas.paste(Image.new("RGBA", (cell, cell), c), (cx, cy))
+    total = H + strip
+    buf = io.BytesIO(); atlas.save(buf, "PNG"); png = buf.getvalue()
+    img_view = add_buffer_view(gltf, bin_, png)
+    gltf["images"] = [{"bufferView": img_view, "mimeType": "image/png"}]
+    gltf["samplers"] = [{"magFilter": 9729, "minFilter": 9729, "wrapS": 33071, "wrapT": 33071}]
+    gltf["textures"] = [{"source": 0, "sampler": 0}]
+    gltf["materials"] = [{"name": "atlas", "pbrMetallicRoughness": {"baseColorTexture": {"index": 0}, "metallicFactor": 0.0, "roughnessFactor": 1.0}}]
+    for _, _, p in prims:
+        mi = p.get("material", 0)
+        count = accessor_count(gltf, p["attributes"]["POSITION"])
+        if colors[mi] is None:
+            uvs = [(u, v * H / total) for u, v in read_accessor_vec2(gltf, bin_, p["attributes"]["TEXCOORD_0"])]
+            data = struct.pack("<%df" % (count * 2), *[x for uv in uvs for x in uv])
+        else:
+            u = ((mi % cols) + 0.5) * cell / W; v = (H + ((mi // cols) + 0.5) * cell) / total
+            data = struct.pack("<%df" % (count * 2), *([u, v] * count))
+        view = add_buffer_view(gltf, bin_, data)
+        gltf["accessors"].append({"bufferView": view, "componentType": 5126, "count": count, "type": "VEC2"})
+        p["attributes"]["TEXCOORD_0"] = len(gltf["accessors"]) - 1
+        p["attributes"].pop("COLOR_0", None); p["material"] = 0
+    gltf["buffers"] = [{"byteLength": len(bin_)}]
+    write_glb(dst, gltf, bin_)
+    return "atlas (%s)" % ("tiled texture averaged" if tiled else "texture + %d colours" % sum(1 for c in colors if c))
+
 def bake(src, dst):
     gltf, bin_ = read_glb(src)
     materials = gltf.get("materials", [])
     images = gltf.get("images", [])
-    textured = any("baseColorTexture" in m.get("pbrMetallicRoughness", {}) for m in materials)
+    n_tex = sum(1 for m in materials if "baseColorTexture" in m.get("pbrMetallicRoughness", {}))
+    textured = n_tex > 0
+    if textured and n_tex < len(materials):
+        return bake_mixed(src, dst, gltf, bin_)
     if textured and images:
         # embed external images so the importer never misses them
         for img in images:
