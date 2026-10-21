@@ -97,11 +97,10 @@ def bake_mixed(src, dst, gltf, bin_):
     W, H = img.size
     prims = [(mesh_i, pi, p) for mesh_i, mesh in enumerate(gltf["meshes"]) for pi, p in enumerate(mesh["primitives"])]
     # tiled textures (UVs outside 0..1, e.g. the checker flags) are repeated into the atlas up to 16x16
-    umin = vmin = 0.0; umax = vmax = 1.0
-    for _, _, p in prims:
-        if p.get("material", 0) in tex_index:
-            for u, v in read_accessor_vec2(gltf, bin_, p["attributes"]["TEXCOORD_0"]):
-                umin, umax, vmin, vmax = min(umin, u), max(umax, u), min(vmin, v), max(vmax, v)
+    uvs_all = [uv for _, _, p in prims if p.get("material", 0) in tex_index
+               for uv in read_accessor_vec2(gltf, bin_, p["attributes"]["TEXCOORD_0"])] or [(0.0, 0.0), (1.0, 1.0)]
+    umin, umax = min(u for u, _ in uvs_all), max(u for u, _ in uvs_all)
+    vmin, vmax = min(v for _, v in uvs_all), max(v for _, v in uvs_all)
     u0, v0 = math.floor(umin), math.floor(vmin)
     ru, rv = int(math.ceil(umax - u0)), int(math.ceil(vmax - v0))
     tiled = False
