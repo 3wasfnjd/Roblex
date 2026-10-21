@@ -8,11 +8,14 @@ can be dropped in later without touching the scripts.
 
 Usage: python3 island-race/tools/build_place.py [-o island-race/build/Island-Race.rbxlx.gz]
 """
-import argparse, gzip, math, os
+import argparse, gzip, json, math, os
 from xml.sax.saxutils import escape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
+CATALOG_PATH = os.path.join(ROOT, "import", "mesh_catalog.json")
+# model name -> {bbox:[x,y,z], parts:[{mesh, texture, rel, size, initial, color}]}; built from the Studio import by tools/catalog
+CATALOG = json.load(open(CATALOG_PATH, encoding="utf-8")) if os.path.exists(CATALOG_PATH) else {}
 
 # ---------------------------------------------------------------- xml helpers
 _ref = 0
@@ -104,6 +107,54 @@ def anchor(name, pos, size, model_name, yaw=0.0):
     a.add(string_value("Model", model_name))
     return a
 
+def mat_mul(a, b):
+    return tuple(tuple(sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)) for i in range(3))
+def mat_vec(a, v):
+    return tuple(sum(a[i][k] * v[k] for k in range(3)) for i in range(3))
+def pitch_rot(radians):
+    c, s = math.cos(radians), math.sin(radians)
+    return ((1, 0, 0), (0, c, -s), (0, s, c))
+
+def has_mesh(model_key):
+    return model_key.split("/")[-1] in CATALOG
+
+def mesh_model(name, model_key, bottom, yaw=0.0, scale=None, fit=None, collide=False, rot=None):
+    """Emit a Model of MeshParts for a catalog entry, standing on `bottom`, rotated by yaw (or an explicit rot)."""
+    entry = CATALOG[model_key.split("/")[-1]]
+    bbox = entry["bbox"]
+    if scale is None:
+        ratios = [fit[i] / bbox[i] for i in range(3) if fit[i] and bbox[i] > 1e-4]
+        scale = min(ratios) if ratios else 1.0
+    R = rot or yaw_rot(yaw)
+    m = model(name)
+    for q in entry["parts"]:
+        rel = q["rel"]
+        off = mat_vec(R, (rel["X"] * scale, rel["Y"] * scale, rel["Z"] * scale))
+        pos = add(bottom, off)
+        local = ((rel["R00"], rel["R01"], rel["R02"]), (rel["R10"], rel["R11"], rel["R12"]), (rel["R20"], rel["R21"], rel["R22"]))
+        prot = mat_mul(R, local)
+        size = (q["size"]["X"] * scale, q["size"]["Y"] * scale, q["size"]["Z"] * scale)
+        ini = q["initial"]
+        props = ['<bool name="Anchored">true</bool>', f'<bool name="CanCollide">{"true" if collide else "false"}</bool>',
+                 cframe_xml("CFrame", pos, prot),
+                 f'<Vector3 name="size"><X>{size[0]:.4f}</X><Y>{size[1]:.4f}</Y><Z>{size[2]:.4f}</Z></Vector3>',
+                 f'<Vector3 name="InitialSize"><X>{ini["X"]:.6f}</X><Y>{ini["Y"]:.6f}</Y><Z>{ini["Z"]:.6f}</Z></Vector3>',
+                 f'<Content name="MeshId"><url>{escape(q["mesh"])}</url></Content>',
+                 '<token name="RenderFidelity">0</token>', '<bool name="CastShadow">true</bool>']
+        if q.get("texture"): props.append(f'<Content name="TextureID"><url>{escape(q["texture"])}</url></Content>')
+        if q.get("color"): props.append(f'<Color3uint8 name="Color3uint8">{q["color"]}</Color3uint8>')
+        if q.get("doubleSided") == "true": props.append('<bool name="DoubleSided">true</bool>')
+        if not collide: props += ['<bool name="CanTouch">false</bool>', '<bool name="CanQuery">false</bool>']
+        m.add(Node("MeshPart", q["name"] or "Mesh", props))
+    return m
+
+def decor(parent, name, model_key, bottom, yaw=0.0, scale=None, fit=None, collide=False, rot=None, fallback=None):
+    """Place a Kenney mesh when it was imported, otherwise the fallback parts (a list of Nodes)."""
+    if has_mesh(model_key):
+        return parent.add(mesh_model(name, model_key, bottom, yaw, scale, fit, collide, rot))
+    for f in (fallback or []): parent.add(f)
+    return None
+
 def script_node(cls, name, source):
     source = source.replace("]]>", "]]]]><![CDATA[>")
     props = ['<bool name="Disabled">false</bool>', f'<ProtectedString name="Source"><![CDATA[{source}]]></ProtectedString>']
@@ -142,7 +193,7 @@ def build_track(track, waypoints, width=14.0):
     Road segments join consecutive points; 'gap' leaves out the segment after that point."""
     road = track.add(folder("Road")); rails = track.add(folder("Rails"))
     cps = track.add(folder("Checkpoints")); boosts = track.add(folder("Boosts")); jumps = track.add(folder("JumpPads"))
-    coins = track.add(folder("Coins")); decor = track.add(folder("Decor"))
+    coins = track.add(folder("Coins")); decor_folder = track.add(folder("Decor"))
     n = len(waypoints); cp_i = 0; coin_i = 0
     for i in range(n):
         a = waypoints[i]; b = waypoints[(i + 1) % n]
@@ -160,6 +211,8 @@ def build_track(track, waypoints, width=14.0):
                 for k in range(2):
                     p = add(pa, mul(direction, 0.35 + k * 0.3))
                     boosts.add(part("Boost", (p[0], p[1] + 0.15, p[2]), (width - 3, 0.3, 6), (90, 230, 255), "Neon", rot, collide=False))
+                    # chevrons lying flat on the pad, pointing down the road
+                    decor(decor_folder, "BoostArrows", "kenney-platformer-kit/arrows", (p[0], p[1] + 0.32, p[2]), scale=9, rot=mat_mul(rot, pitch_rot(-math.pi / 2)))
             cnt = a.get("coins", 0)
             for k in range(cnt):
                 p = add(pa, mul(direction, (k + 1) / (cnt + 1)))
@@ -169,20 +222,24 @@ def build_track(track, waypoints, width=14.0):
             prev = sub(pa, waypoints[i - 1]["p"])
             p = sub(pa, mul(norm(prev), 5))
             jumps.add(part("JumpPad", (p[0], p[1] + 0.3, p[2]), (width - 4, 0.6, 5), (255, 120, 60), "Neon", look_rot(prev)))
+            decor(decor_folder, "SpringDecor", "kenney-platformer-kit/spring", (p[0], p[1] + 0.6, p[2]), scale=7)
         if a.get("cp"):
             cp_i += 1
             cps.add(part(f"CP{cp_i}", (pa[0], pa[1] + 7, pa[2]), (width + 6, 14, 10), (255, 255, 255), "Neon", rot, collide=False, transparency=0.94, touch=False, query=False))
             for s in (-1, 1):
                 q = add(pa, mul(right, s * (width / 2 + 1)))
-                rails.add(part("Pylon", (q[0], q[1] + 4, q[2]), (1.2, 8, 1.2), BLUE, "Neon", IDENTITY, collide=False))
-                decor.add(anchor("FlagSpot", (q[0], q[1] + 4, q[2]), (2, 8, 2), "kenney-racing-kit/flagCheckersSmall"))
+                decor(decor_folder, "CheckFlag", "kenney-racing-kit/flagCheckersSmall", (q[0], q[1], q[2]), yaw=math.atan2(direction[0], -direction[2]) + math.pi / 2, fit=(4, 9, 4),
+                      fallback=[part("Pylon", (q[0], q[1] + 4, q[2]), (1.2, 8, 1.2), BLUE, "Neon", IDENTITY, collide=False)])
         for k in range(a.get("trees", 0)):
             p = add(pa, mul(direction, (k + 0.5) / a["trees"]))
             s = -1 if k % 2 else 1
             q = add(p, mul(right, s * (width / 2 + 7)))
-            rails.add(part("Tree", (q[0], q[1] + 4, q[2]), (1.2, 8, 1.2), WOOD, "Wood", IDENTITY))
-            rails.add(part("Leaves", (q[0], q[1] + 10, q[2]), (7, 8, 7), (70, 170, 90), "Grass", IDENTITY, shape="Ball"))
-            decor.add(anchor("TreeSpot", (q[0], q[1] + 6, q[2]), (6, 12, 6), "kenney-nature-kit/tree_default", yaw=k * 1.3))
+            forest = pa[2] > 190
+            kind = ("kenney-platformer-kit/tree-pine" if k % 2 else "kenney-platformer-kit/tree") if forest else ("kenney-racing-kit/treeLarge" if k % 2 else "kenney-racing-kit/treeSmall")
+            ground = 0.0 if not forest else min(pa[1], pb[1])   # trees stand on the island, not on the raised road
+            decor(decor_folder, "Tree", kind, (q[0], ground, q[2]), yaw=k * 1.3, fit=(10, 16 if forest else 14, 10), collide=True,
+                  fallback=[part("Tree", (q[0], ground + 4, q[2]), (1.2, 8, 1.2), WOOD, "Wood", IDENTITY),
+                            part("Leaves", (q[0], ground + 10, q[2]), (7, 8, 7), (70, 170, 90), "Grass", IDENTITY, shape="Ball")])
     return cp_i
 
 def main():
@@ -210,17 +267,26 @@ def main():
     jp = lobby.add(part("JoinPoint", (0, 3, -22), (2, 6, 2), (70, 210, 120), "Neon")); jp.add(prompt("Join", "انضم للسباق", "بوابة السباق"))
     lobby.add(part("JoinArch", (0, 7, -22), (14, 1.2, 1.2), (70, 210, 120), "Neon", collide=False))
     lobby.add(part("JoinPost", (-7, 3.5, -22), (1.2, 7, 1.2), (70, 210, 120), "Neon")); lobby.add(part("JoinPost", (7, 3.5, -22), (1.2, 7, 1.2), (70, 210, 120), "Neon"))
-    sp = lobby.add(part("ShopPoint", (24, 3, 0), (6, 6, 6), (255, 150, 40), "SmoothPlastic")); sp.add(prompt("Shop", "افتح المتجر", "كراج المركبات"))
-    lobby.add(part("ShopRoof", (24, 6.8, 0), (9, 0.8, 9), NAVY, "SmoothPlastic", collide=False))
-    lobby.add(anchor("ShopDecor", (24, 3, 0), (8, 8, 8), "kenney-racing-kit/pitsGarage", yaw=math.pi / 2))
+    garage = has_mesh("kenney-racing-kit/pitsGarage")
+    sp = lobby.add(part("ShopPoint", (26, 3, 0), (6, 6, 6), (255, 150, 40), "SmoothPlastic", collide=not garage, transparency=1.0 if garage else 0.0)); sp.add(prompt("Shop", "افتح المتجر", "كراج المركبات"))
+    decor(lobby, "Garage", "kenney-racing-kit/pitsGarage", (30, 0, 0), yaw=-math.pi / 2, fit=(18, 13, 18), collide=True,
+          fallback=[part("ShopRoof", (24, 6.8, 0), (9, 0.8, 9), NAVY, "SmoothPlastic", collide=False)])
+    for k, car in enumerate(("raceCarRed", "raceCarGreen", "raceCarOrange", "raceCarWhite")):
+        decor(lobby, "ParkedCar", "kenney-racing-kit/" + car, (14, 0, -18 + k * 12), yaw=math.pi / 2, fit=(8, 5, 11), collide=True)
+    decor(lobby, "Trophy", "kenney-mini-arena/trophy", (-22, 0, 0), fit=(6, 6, 6))
+    for k, (x, z) in enumerate(((-20, -24), (20, -24), (-20, 24), (20, 24))):
+        decor(lobby, "Banner", "kenney-racing-kit/" + ("bannerTowerRed" if k % 2 else "bannerTowerGreen"), (x, 0, z), fit=(4, 12, 4))
+    for k, (x, z) in enumerate(((36, 20), (-36, -20), (30, -32), (-30, 30))):
+        decor(lobby, "Rocks", "kenney-platformer-kit/" + ("rocks" if k % 2 else "stones"), (x, 0, z), yaw=k * 0.8, fit=(7, 4, 7))
+        decor(lobby, "Flowers", "kenney-platformer-kit/flowers", (x + 5, 0, z - 4), yaw=k, fit=(5, 2, 5))
     lobby.add(part("Board", (-26, 8, 0), (0.6, 14, 30), NAVY, "SmoothPlastic", yaw_rot(-math.pi / 2)))
     lobby.add(part("BoardPost", (-26, 0.5, -14), (1, 2, 1), NAVY, "SmoothPlastic")); lobby.add(part("BoardPost", (-26, 0.5, 14), (1, 2, 1), NAVY, "SmoothPlastic"))
     lobby.add(part("Sign", (0, 9.5, -22), (16, 3.5, 0.5), NAVY, "SmoothPlastic", yaw_rot(math.pi)))
     for k in range(6):
         ang = k * math.pi / 3
         q = (math.cos(ang) * 34, 0, math.sin(ang) * 34)
-        lobby.add(part("Lamp", (q[0], 5, q[2]), (0.6, 10, 0.6), ROCK, "Metal")); lobby.add(part("LampLight", (q[0], 10.3, q[2]), (1.6, 1.6, 1.6), (255, 240, 200), "Neon", shape="Ball", collide=False))
-        lobby.add(anchor("LampSpot", (q[0], 5, q[2]), (2, 10, 2), "kenney-racing-kit/lightPostModern"))
+        decor(lobby, "Lamp", "kenney-racing-kit/lightPostModern", (q[0], 0, q[2]), yaw=-ang, fit=(3, 12, 4), collide=True,
+              fallback=[part("Lamp", (q[0], 5, q[2]), (0.6, 10, 0.6), ROCK, "Metal"), part("LampLight", (q[0], 10.3, q[2]), (1.6, 1.6, 1.6), (255, 240, 200), "Neon", shape="Ball", collide=False)])
 
     # ------------------------------------------------ track: harbour loop + two bridges + forest hill
     W = 14
@@ -254,20 +320,26 @@ def main():
     right = norm(cross((0, 1, 0), norm(direction))); back = norm(mul(direction, -1))
     track.add(part("StartLine", (start[0], start[1] + 7, start[2]), (W + 6, 14, 10), LINE, "Neon", rot, collide=False, transparency=0.94, touch=False, query=False))
     track.add(part("StartStripe", (start[0], start[1] + 0.12, start[2]), (W, 0.25, 2.5), LINE, "SmoothPlastic", rot, collide=False))
-    track.add(part("StartArch", (start[0], start[1] + 11, start[2]), (W + 8, 2, 2), RAIL, "Neon", rot, collide=False))
-    for s in (-1, 1):
-        q = add(start, mul(right, s * (W / 2 + 3)))
-        track.add(part("ArchPost", (q[0], q[1] + 5.5, q[2]), (1.5, 11, 1.5), NAVY, "SmoothPlastic"))
-    track.add(anchor("StartDecor", (start[0], start[1] + 6, start[2]), (W + 8, 12, 4), "kenney-racing-kit/roadStart", yaw=math.atan2(direction[0], -direction[2])))
+    gate_yaw = math.atan2(direction[0], -direction[2])
+    decor(track, "StartGate", "kenney-racing-kit/roadStart", (start[0], start[1] - 0.05, start[2]), yaw=gate_yaw, scale=14,
+          fallback=[part("StartArch", (start[0], start[1] + 11, start[2]), (W + 8, 2, 2), RAIL, "Neon", rot, collide=False)] +
+                   [part("ArchPost", add(start, mul(right, sgn * (W / 2 + 3)))[:1] + (start[1] + 5.5,) + add(start, mul(right, sgn * (W / 2 + 3)))[2:], (1.5, 11, 1.5), NAVY, "SmoothPlastic") for sgn in (-1, 1)])
     grid = track.add(folder("Grid"))
     for i in range(8):
         col = i % 2; row = i // 2
         q = add(add(start, mul(back, 6 + row * 7)), mul(right, (-1 if col == 0 else 1) * 3.5))
         grid.add(part(f"Slot{i + 1}", (q[0], q[1] + 0.12, q[2]), (3, 0.25, 5), LINE, "SmoothPlastic", rot, collide=False, transparency=0.4, touch=False, query=False))
-    gs = add(start, mul(right, -(W / 2 + 12)))
-    track.add(part("StandBase", (gs[0], gs[1] + 1.5, gs[2]), (10, 3, 40), (200, 60, 60), "SmoothPlastic", rot))
-    track.add(part("StandTop", (gs[0] - 3, gs[1] + 4.5, gs[2]), (4, 3, 40), (220, 90, 90), "SmoothPlastic", rot))
-    track.add(anchor("StandDecor", (gs[0], gs[1] + 3, gs[2]), (10, 6, 40), "kenney-racing-kit/grandStand", yaw=math.atan2(direction[0], -direction[2])))
+    gs = add(start, mul(right, -(W / 2 + 13)))
+    if has_mesh("kenney-racing-kit/grandStand"):
+        for k in range(3):
+            q = add(gs, mul(norm(direction), (k - 1) * 13))
+            decor(track, "GrandStand", "kenney-racing-kit/" + ("grandStandAwning" if k == 1 else "grandStand"), q, yaw=gate_yaw + math.pi / 2, fit=(13, 12, 13), collide=True)
+    else:
+        track.add(part("StandBase", (gs[0], gs[1] + 1.5, gs[2]), (10, 3, 40), (200, 60, 60), "SmoothPlastic", rot))
+        track.add(part("StandTop", (gs[0] - 3, gs[1] + 4.5, gs[2]), (4, 3, 40), (220, 90, 90), "SmoothPlastic", rot))
+    # billboard and overhead lights near the start
+    decor(track, "Billboard", "kenney-racing-kit/billboard", add(start, mul(right, (W / 2 + 14))), yaw=gate_yaw + math.pi, fit=(12, 12, 6))
+    decor(track, "Overhead", "kenney-racing-kit/overheadLights", add(waypoints[2]["p"], (0, -0.05, 0)), yaw=math.atan2(*(sub(waypoints[3]["p"], waypoints[2]["p"])[0], -sub(waypoints[3]["p"], waypoints[2]["p"])[2])), scale=16)
 
     # ------------------------------------------------ services
     lighting = Node("Lighting", "Lighting", ['<float name="ClockTime">14.5</float>', '<float name="Brightness">2.2</float>', '<token name="Technology">1</token>',
@@ -280,6 +352,11 @@ def main():
     for n in load_scripts(os.path.join(SRC, "ReplicatedStorage", "IslandRace")): shared.add(n)
     remotes = shared.add(folder("Remotes"))
     for name in ("State", "Action", "Notice", "Race"): remotes.add(Node("RemoteEvent", name))
+    if has_mesh("kenney-platformer-kit/coin-gold"):
+        templates = shared.add(folder("Templates"))
+        coin = mesh_model("CoinModel", "kenney-platformer-kit/coin-gold", (0, 0, 0), scale=6)
+        coin.children[0].name = "Coin"
+        templates.add(coin.children[0])
 
     sss = Node("ServerScriptService", "ServerScriptService")
     for n in load_scripts(os.path.join(SRC, "ServerScriptService")): sss.add(n)

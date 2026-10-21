@@ -483,11 +483,20 @@ end)
 do
 	local markers = track:FindFirstChild("Coins") and track.Coins:GetChildren() or {}
 	local coins = {}
+	local template = shared:FindFirstChild("Templates") and shared.Templates:FindFirstChild("Coin")
 	for _, m in ipairs(markers) do
-		local c = Instance.new("Part"); c.Name = "Coin"; c.Shape = Enum.PartType.Cylinder; c.Size = Vector3.new(0.3, 2, 2)
-		c.Material = Enum.Material.Neon; c.Color = Color3.fromRGB(255, 205, 60); c.Anchored = true; c.CanCollide = false; c.CanTouch = false; c.CanQuery = false
-		c.CFrame = CFrame.new(m.Position) * CFrame.Angles(0, 0, math.pi / 2); c.Parent = m
-		table.insert(coins, {Part = c, Ready = true})
+		local c
+		if template then
+			c = template:Clone(); c.Name = "Coin"; c.Anchored = true; c.CanCollide = false; c.CanTouch = false; c.CanQuery = false
+			c.CFrame = CFrame.new(m.Position)
+		else
+			c = Instance.new("Part"); c.Name = "Coin"; c.Shape = Enum.PartType.Cylinder; c.Size = Vector3.new(0.3, 2, 2)
+			c.Material = Enum.Material.Neon; c.Color = Color3.fromRGB(255, 205, 60); c.Anchored = true; c.CanCollide = false; c.CanTouch = false; c.CanQuery = false
+			c.CFrame = CFrame.new(m.Position) * CFrame.Angles(0, 0, math.pi / 2)
+		end
+		local glow = Instance.new("PointLight"); glow.Color = Color3.fromRGB(255, 205, 60); glow.Range = 7; glow.Brightness = 0.8; glow.Parent = c
+		c.Parent = m
+		table.insert(coins, {Part = c, Ready = true, Mesh = template ~= nil})
 	end
 	task.spawn(function()
 		local spin = 0
@@ -507,7 +516,9 @@ do
 				end
 			end
 			for _, coin in ipairs(coins) do
-				if coin.Ready then coin.Part.CFrame = CFrame.new(coin.Part.Position) * CFrame.Angles(0, spin, math.pi / 2) end
+				if coin.Ready then
+					coin.Part.CFrame = CFrame.new(coin.Part.Position) * (coin.Mesh and CFrame.Angles(0, spin, 0) or CFrame.Angles(0, spin, math.pi / 2))
+				end
 			end
 		end
 	end)
