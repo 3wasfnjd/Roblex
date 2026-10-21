@@ -41,10 +41,11 @@ jobs:
           else
             code=$(curl -sSL -A "$UA" -w "%{http_code}" "$URL" -o work/page.html || true)
             echo "page: HTTP $code, $(wc -c < work/page.html) bytes"
-            ZIP=$(grep -oiE '(href|src|data-[a-z-]+)="[^"]*\.zip[^"]*"' work/page.html | head -1 | sed 's/^[^=]*="//; s/"$//' || true)
+            # attributes may use single or double quotes
+            ZIP=$(grep -oiE "(href|src|action|data-[a-z-]+)=['\"][^'\"]*\.zip[^'\"]*['\"]" work/page.html | head -1 | sed -E "s/^[^=]*=['\"]//; s/['\"]$//" || true)
             if [ -z "$ZIP" ]; then
-              echo "no .zip link found on the page; links mentioning zip/download:"
-              grep -oiE '(href|action|src)="[^"]*(zip|download)[^"]*"' work/page.html | sort -u | head -40 || true
+              echo "no .zip link found on the page; tokens mentioning zip/download:"
+              grep -oiE "[^'\" <>]*(zip|download)[^'\" <>]*" work/page.html | sort -u | head -40 || true
               echo "--- page head ---"; head -c 1500 work/page.html; echo
               exit 1
             fi
